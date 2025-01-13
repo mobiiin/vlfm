@@ -49,6 +49,7 @@ class BLIP2ITM:
         img = self.vis_processors["eval"](pil_img).unsqueeze(0).to(self.device)
         txt = self.text_processors["eval"](txt)
         with torch.inference_mode():
+            
             cosine = self.model({"image": img, "text_input": txt}, match_head="itc").item()
 
         return cosine

@@ -93,6 +93,15 @@ class ActionReplayPolicy(BasePolicy):
         # Save the rgb and depth images
         rgb = observations["rgb"][0].cpu().numpy()
         depth = observations["depth"][0].cpu().numpy()
+
+        ##########
+        # depth_normalized = (depth / depth.max() * 255).astype(np.uint8)
+        # depth_colored = cv2.cvtColor(depth_normalized, cv2.COLOR_GRAY2BGR)
+        # combined_frame = np.hstack((rgb, depth_colored))
+        # cv2.imshow("RGB and Depth", combined_frame)
+        # cv2.waitKey(1) 
+        #####
+
         rgb_path = os.path.join(
             self._dir,
             "imgs",
