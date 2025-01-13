@@ -2,6 +2,22 @@
 
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 
+# task:
+#   measurements:
+#     - type: "TopDownMap"  # Example measurement for rendering a top-down view
+#       output_size: [480, 640]
+#       draw_agent: True
+#       draw_goal_positions: True
+#       draw_collisions: True
+
+# video:
+#   option: ["disk", "tensorboard"] # Enable video saving to disk and tensorboard
+#   fps: 10  # Frames per second for saved video
+
+# logging:
+#   level: DEBUG  # Enables verbose logging for visualization debugging
+
+ 
 defaults:
   - /habitat_baselines: habitat_baselines_rl_config_base
   - /benchmark/nav/objectnav: objectnav_hm3d
@@ -25,18 +41,28 @@ habitat:
     success_reward: 2.5
     slack_reward: -1e-3
     lab_sensors:
+      # rgb_sensor:
+      #   type: "HabitatSimRGBSensor"
+        # height: 480
+        # width: 640
+        # position: [0, 1.25, 0]
+        # orientation: [0, 0, 0]
       base_explorer:
         turn_angle: 30
+  # simulator:
+  #   habitat_sim_viz: True
 
 habitat_baselines:
   evaluate: True
   eval_ckpt_path_dir: data/dummy_policy.pth
   num_environments: 1
   load_resume_state_config: False
-
+  # video_option: "tensorboard"
   torch_gpu_id: 0
   tensorboard_dir: "tb"
-  video_dir: "video_dir"
+  video_dir: "/home/mhabibp/vlfm/video"
+  # VIDEO_OPTION: "disk" 
+  # record_video_frequency: 10
   test_episode_count: -1
   checkpoint_folder: "data/new_checkpoints"
   trainer_name: "vlfm"
@@ -49,6 +75,7 @@ habitat_baselines:
 
   eval:
     split: "val"
+    video_option: ["disk", "tensorboard"]
 
   rl:
 

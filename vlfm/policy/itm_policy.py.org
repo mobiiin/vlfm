@@ -12,7 +12,7 @@ from vlfm.mapping.value_map import ValueMap
 from vlfm.policy.base_objectnav_policy import BaseObjectNavPolicy
 from vlfm.policy.utils.acyclic_enforcer import AcyclicEnforcer
 from vlfm.utils.geometry_utils import closest_point_within_threshold
-from vlfm.vlm.llava_ask import VLMModelClient  
+from vlfm.vlm.blip2itm import BLIP2ITMClient
 from vlfm.vlm.detections import ObjectDetections
 
 try:
@@ -45,7 +45,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
-        self._vlm_client = VLMModelClient(port=int(os.environ.get("LLAVA_PORT", "12182"))) 
+        self._itm = BLIP2ITMClient(port=int(os.environ.get("BLIP2ITM_PORT", "12182")))
         self._text_prompt = text_prompt
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
@@ -190,24 +190,20 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
     def _update_value_map(self) -> None:
         all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
-        action_scores_list = []
-
-        for rgb in all_rgb:
-            # Get the model's response and action scores
-            response, action_scores = self._vlm_client.process_input(
-                rgb,
-                self._text_prompt,
-                replace_word=self._target_object,  # Pass the target object as replace_word
-            )
-            action_scores_list.append(action_scores)
-
-        for action_scores, (rgb, depth, tf, min_depth, max_depth, fov) in zip(
-            action_scores_list, self._observations_cache["value_map_rgbd"]
+        cosines = [
+            [
+                self._itm.cosine(
+                    rgb,
+                    p.replace("target_object", self._target_object.replace("|", "/")),
+                )
+                for p in self._text_prompt.split(PROMPT_SEPARATOR)
+            ]
+            for rgb in all_rgb
+        ]
+        for cosine, (rgb, depth, tf, min_depth, max_depth, fov) in zip(
+            cosines, self._observations_cache["value_map_rgbd"]
         ):
-            # Convert action_scores dictionary to a numpy array
-            scores_array = np.array([action_scores.get(action, 0.0) for action in ["Go forward", "Go backward", "Turn right", "Turn left"]])
-            print(scores_array)
-            self._value_map.update_map(scores_array, depth, tf, min_depth, max_depth, fov)
+            self._value_map.update_map(np.array(cosine), depth, tf, min_depth, max_depth, fov)
 
         self._value_map.update_agent_traj(
             self._observations_cache["robot_xy"],

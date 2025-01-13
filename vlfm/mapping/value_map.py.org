@@ -97,28 +97,6 @@ class ValueMap(BaseMap):
         super().reset()
         self._value_map.fill(0)
 
-    def _create_circular_mask(self, center: Tuple[int, int], radius: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Create a circular mask centered at the robot's position, divided into 4 quadrants.
-
-        Args:
-            center: The (x, y) coordinates of the robot's position in the map.
-            radius: The radius of the circle in pixels.
-
-        Returns:
-            Four boolean masks for the forward, backward, left, and right quadrants.
-        """
-        y, x = np.ogrid[-center[0]:self.size - center[0], -center[1]:self.size - center[1]]
-        mask = x**2 + y**2 <= radius**2  # Circular mask
-
-        # Divide the circle into 4 non-overlapping quadrants
-        forward_mask = np.logical_and(mask, np.logical_and(x >= 0, np.abs(y) <= np.abs(x)))  # Forward quadrant
-        backward_mask = np.logical_and(mask, np.logical_and(x < 0, np.abs(y) <= np.abs(x)))  # Backward quadrant
-        left_mask = np.logical_and(mask, np.logical_and(y >= 0, np.abs(y) > np.abs(x)))  # Left quadrant
-        right_mask = np.logical_and(mask, np.logical_and(y < 0, np.abs(y) > np.abs(x)))  # Right quadrant
-
-        return forward_mask, backward_mask, left_mask, right_mask
-    
     def update_map(
         self,
         values: np.ndarray,
@@ -131,8 +109,7 @@ class ValueMap(BaseMap):
         """Updates the value map with the given depth image, pose, and value to use.
 
         Args:
-            values: The value to use for updating the map. This is now a numpy array of
-                action scores for ["Go forward", "Go backward", "Turn right", "Turn left"].
+            values: The value to use for updating the map.
             depth: The depth image to use for updating the map; expected to be already
                 normalized to the range [0, 1].
             tf_camera_to_episodic: The transformation matrix from the episodic frame to
@@ -142,26 +119,13 @@ class ValueMap(BaseMap):
             fov: The field of view of the camera in RADIANS.
         """
         assert (
-            len(values) == 4
-        ), f"Incorrect number of values given ({len(values)}). Expected 4 (one for each action)."
+            len(values) == self._value_channels
+        ), f"Incorrect number of values given ({len(values)}). Expected {self._value_channels}."
 
-        # Get the robot's position in the map
-        cam_x, cam_y = tf_camera_to_episodic[:2, 3] / tf_camera_to_episodic[3, 3]
-        px = int(cam_x * self.pixels_per_meter) + self._episode_pixel_origin[0]
-        py = int(-cam_y * self.pixels_per_meter) + self._episode_pixel_origin[1]
+        curr_map = self._localize_new_data(depth, tf_camera_to_episodic, min_depth, max_depth, fov)
 
-        # Calculate the radius of the circle based on max_depth and FOV
-        radius = int(max_depth * self.pixels_per_meter)  # Radius in pixels
-
-        # Create a circular mask centered at the robot's position
-        forward_mask, backward_mask, left_mask, right_mask = self._create_circular_mask((px, py), radius)
-
-        # Apply the action scores to the corresponding quadrants
-        print(values)
-        self._value_map[forward_mask, 0] = values[0]  # "Go forward"
-        self._value_map[backward_mask, 0] = values[1]  # "Go backward"
-        self._value_map[left_mask, 0] = values[2]  # "Turn left"
-        self._value_map[right_mask, 0] = values[3]  # "Turn right"
+        # Fuse the new data with the existing data
+        self._fuse_new_data(curr_map, values)
 
         if RECORDING:
             idx = len(glob.glob(osp.join(RECORDING_DIR, "*.png")))
