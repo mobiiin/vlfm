@@ -68,6 +68,9 @@ class VLMModel:
         with torch.inference_mode():
             output = self.model.generate(**inputs, max_new_tokens=300)
             response = self.processor.decode(output[0], skip_special_tokens=True)
+        
+        # Print the model's response
+        print("VLM Model Response:", response)
 
         # Extract action scores using regex
         pattern = r"(Go forward|Go backward|Turn right|Turn left): (\d+(\.\d+)?)"
@@ -93,7 +96,7 @@ class VLMModelClient:
         Returns:
             tuple: A tuple containing the model's response and a dictionary of action scores.
         """
-        print(f"VLMModelClient.process_input: {image.shape}, {prompt}, replace_word={replace_word}")
+        # print(f"VLMModelClient.process_input: {image.shape}, {prompt}, replace_word={replace_word}")
         response = send_request(self.url, image=image, prompt=prompt, replace_word=replace_word)
         return response["response"], response["action_scores"]
 

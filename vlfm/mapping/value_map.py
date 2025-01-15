@@ -157,7 +157,7 @@ class ValueMap(BaseMap):
         forward_mask, backward_mask, left_mask, right_mask = self._create_circular_mask((px, py), radius)
 
         # Apply the action scores to the corresponding quadrants
-        print(values)
+        # print(values)
         self._value_map[forward_mask, 0] = values[0]  # "Go forward"
         self._value_map[backward_mask, 0] = values[1]  # "Go backward"
         self._value_map[left_mask, 0] = values[2]  # "Turn left"
