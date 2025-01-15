@@ -3,7 +3,7 @@
 import os
 from collections import defaultdict
 from typing import Any, Dict, List
-
+import pdb
 import numpy as np
 import torch
 import tqdm
@@ -62,7 +62,10 @@ class VLFMTrainer(PPOTrainer):
         Returns:
             None
         """
+        # pdb.set_trace()
+        self._is_distributed = False
         if self._is_distributed:
+            
             raise RuntimeError("Evaluation does not support distributed mode")
 
         # Some configurations require not to load the checkpoint, like when using
