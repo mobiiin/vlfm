@@ -35,6 +35,7 @@ defaults:
 
 habitat:
   environment:
+    max_episode_steps: 300
     iterator_options:
       max_scene_repeat_steps: 50000
   task:

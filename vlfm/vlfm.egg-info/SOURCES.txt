@@ -52,10 +52,15 @@ vlfm/vlfm.egg-info/top_level.txt
 vlfm/vlm/__init__.py
 vlfm/vlm/blip2.py
 vlfm/vlm/blip2itm.py
+vlfm/vlm/bliptest.py
 vlfm/vlm/coco_classes.py
 vlfm/vlm/detections.py
 vlfm/vlm/fiber.py
 vlfm/vlm/grounding_dino.py
+vlfm/vlm/llava_ask.py
+vlfm/vlm/llava_server.py
+vlfm/vlm/llavatest.py
 vlfm/vlm/sam.py
 vlfm/vlm/server_wrapper.py
+vlfm/vlm/vlmtest.py
 vlfm/vlm/yolov7.py

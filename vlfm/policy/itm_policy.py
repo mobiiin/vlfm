@@ -40,7 +40,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         self,
         text_prompt: str,
         use_max_confidence: bool = True,
-        sync_explored_areas: bool = False,
+        sync_explored_areas: bool = True,
         *args: Any,
         **kwargs: Any,
     ):

@@ -7,8 +7,11 @@ from io import BytesIO
 import re
 import requests
 import json
+import cv2
 
 from .server_wrapper import ServerMixin, host_model, str_to_image
+
+from vlfm.utils.frame_saver import get_last_frames
 
 try:
     from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
@@ -30,7 +33,7 @@ class VLMModel:
         # Load model and processor
         self.processor = LlavaNextProcessor.from_pretrained(model_name)
         self.model = LlavaNextForConditionalGeneration.from_pretrained(
-            model_name, torch_dtype=torch.float16, low_cpu_mem_usage=True
+            model_name, torch_dtype=torch.float16
         )
         self.model.to(device)
         self.device = device
@@ -51,7 +54,7 @@ class VLMModel:
         updated_prompt = re.sub(r"couch", replace_word, prompt, flags=re.IGNORECASE)
 
         pil_img = Image.fromarray(image)
-
+         
         conversation = [
             {
                 "role": "user",
@@ -66,7 +69,7 @@ class VLMModel:
         inputs = self.processor(pil_img, text=prompt, return_tensors="pt").to(self.device)
 
         with torch.inference_mode():
-            output = self.model.generate(**inputs, max_new_tokens=300)
+            output = self.model.generate(**inputs, max_new_tokens=300, temperature=1)
             response = self.processor.decode(output[0], skip_special_tokens=True)
 
         # Extract action scores using regex
@@ -93,8 +96,13 @@ class VLMModelClient:
         Returns:
             tuple: A tuple containing the model's response and a dictionary of action scores.
         """
-        print(f"VLMModelClient.process_input: {image.shape}, {prompt}, replace_word={replace_word}")
+        # getting obstacle maps
+        # topdown_obstacle_frames = get_last_frames()
+        # if frames is not None: 
+        #     cv2.imwrite("_topdownmappp.png", frames[0])  
+        # print(f"VLMModelClient.process_input: {image.shape}, {prompt}, replace_word={replace_word}")
         response = send_request(self.url, image=image, prompt=prompt, replace_word=replace_word)
+        print("VLM Model Response:", response)
         return response["response"], response["action_scores"]
 
 

@@ -19,7 +19,7 @@ from vlfm.utils.img_utils import (
     rotate_image,
 )
 from vlfm.utils.visualization import add_text_to_image, pad_images
-
+from vlfm.utils.frame_saver import save_frame
 
 class HabitatVis:
     def __init__(self) -> None:
@@ -78,6 +78,10 @@ class HabitatVis:
         if vis_map_imgs:
             self.using_vis_maps = True
             self.vis_maps.append(vis_map_imgs)
+
+        save_frame(vis_map_imgs[0])
+        cv2.imwrite("_topdownmappp.png", vis_map_imgs[0])
+
         text = [
             policy_info[0][text_key]
             for text_key in policy_info[0].get("render_below_images", [])
@@ -133,7 +137,7 @@ class HabitatVis:
             vis_map = np.rot90(vis_map, 1)
 
         vis_map = reorient_rescale_map(vis_map)
-
+        
         return vis_map
 
     @staticmethod
@@ -188,6 +192,9 @@ class HabitatVis:
         # Add text to the top of the frame
         for t in text[::-1]:
             frame = add_text_to_image(frame, t, top=True)
+        
+        # Save the frame as an image for inspection
+        # cv2.imwrite("frame_inspection.png", frame)
 
         return frame
 

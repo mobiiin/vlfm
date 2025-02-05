@@ -74,29 +74,74 @@ class TrajectoryVisualizer:
 
         return img
 
+    # def _draw_agent(self, img: np.ndarray, camera_position: np.ndarray, camera_yaw: float) -> np.ndarray:
+    #     """Draws the agent on the image and returns it"""
+    #     px_position = self._metric_to_pixel(camera_position)
+    #     cv2.circle(
+    #         img,
+    #         tuple(px_position[::-1]),
+    #         int(8 * self.scale_factor),
+    #         (255, 192, 15),
+    #         -1,
+    #     )
+    #     heading_end_pt = (
+    #         int(px_position[0] - self.agent_line_length * self.scale_factor * np.cos(camera_yaw)),
+    #         int(px_position[1] - self.agent_line_length * self.scale_factor * np.sin(camera_yaw)),
+    #     )
+    #     cv2.line(
+    #         img,
+    #         tuple(px_position[::-1]),
+    #         tuple(heading_end_pt[::-1]),
+    #         (0, 0, 0),
+    #         int(self.agent_line_thickness * self.scale_factor),
+    #     )
+
+    #     return img
+
     def _draw_agent(self, img: np.ndarray, camera_position: np.ndarray, camera_yaw: float) -> np.ndarray:
-        """Draws the agent on the image and returns it"""
+        """
+        Draws the agent on the image with a circle and an arrow to indicate direction.
+
+        Args:
+            img (np.ndarray): The image to draw on.
+            camera_position (np.ndarray): The position of the agent in metric coordinates.
+            camera_yaw (float): The yaw angle of the agent in radians.
+
+        Returns:
+            np.ndarray: The image with the agent drawn.
+        """
+        # Convert metric position to pixel coordinates
         px_position = self._metric_to_pixel(camera_position)
+
+        # Draw a circle to represent the agent
+        circle_radius = int(8 * self.scale_factor)  # Increased size for better visibility
         cv2.circle(
             img,
-            tuple(px_position[::-1]),
-            int(8 * self.scale_factor),
-            (255, 192, 15),
-            -1,
+            tuple(px_position[::-1]),  # OpenCV uses (x, y), so reverse the coordinates
+            circle_radius,
+            (255, 192, 15),  # Circle color (BGR format)
+            -1,  # Fill the circle
         )
-        heading_end_pt = (
-            int(px_position[0] - self.agent_line_length * self.scale_factor * np.cos(camera_yaw)),
-            int(px_position[1] - self.agent_line_length * self.scale_factor * np.sin(camera_yaw)),
+
+        # Calculate the end point of the arrow based on the yaw angle
+        arrow_length = int(self.agent_line_length * self.scale_factor * 1.8)  # Increased length for better visibility
+        arrow_end_pt = (
+            int(px_position[0] - arrow_length * np.cos(camera_yaw)),  # x-coordinate
+            int(px_position[1] - arrow_length * np.sin(camera_yaw)),  # y-coordinate
         )
-        cv2.line(
+
+        # Draw an arrow to indicate the agent's direction
+        cv2.arrowedLine(
             img,
-            tuple(px_position[::-1]),
-            tuple(heading_end_pt[::-1]),
-            (0, 0, 0),
-            int(self.agent_line_thickness * self.scale_factor),
+            tuple(px_position[::-1]),  # Start point of the arrow (center of the circle)
+            tuple(arrow_end_pt[::-1]),  # End point of the arrow
+            (0, 255, 255),  # Arrow color (cyan in BGR format)
+            thickness=int(self.agent_line_thickness * self.scale_factor * 1.5),  # Increased thickness
+            tipLength=0.5,  # Length of the arrow tip relative to the arrow length
         )
 
         return img
+
 
     def draw_circle(self, img: np.ndarray, position: np.ndarray, **kwargs: Any) -> np.ndarray:
         """Draws the point as a circle on the image and returns it"""

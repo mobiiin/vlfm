@@ -192,6 +192,5 @@ class ObstacleMap(BaseMap):
 
         return vis_img
 
-
 def filter_points_by_height(points: np.ndarray, min_height: float, max_height: float) -> np.ndarray:
     return points[(points[:, 2] >= min_height) & (points[:, 2] <= max_height)]

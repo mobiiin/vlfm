@@ -45,6 +45,7 @@ def extract_scalars_from_info(info: Dict[str, Any]) -> Dict[str, float]:
 @baseline_registry.register_trainer(name="vlfm")
 class VLFMTrainer(PPOTrainer):
     envs: VectorEnv
+    
 
     def _eval_checkpoint(
         self,
@@ -62,6 +63,7 @@ class VLFMTrainer(PPOTrainer):
         Returns:
             None
         """
+        self._is_distributed = False
         if self._is_distributed:
             raise RuntimeError("Evaluation does not support distributed mode")
 

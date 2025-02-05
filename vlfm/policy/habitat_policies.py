@@ -24,6 +24,7 @@ from vlfm.vlm.grounding_dino import ObjectDetections
 from ..mapping.obstacle_map import ObstacleMap
 from .base_objectnav_policy import BaseObjectNavPolicy, VLFMConfig
 from .itm_policy import ITMPolicy, ITMPolicyV2, ITMPolicyV3
+import cv2
 
 HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
 MP3D_ID_TO_NAME = [
@@ -199,6 +200,7 @@ class HabitatMixin:
                 self._fy,
                 self._camera_fov,
             )
+            # cv2.imwrite('obstacle_map.png', self._obstacle_map.visualize())
             frontiers = self._obstacle_map.frontiers
             self._obstacle_map.update_agent_traj(robot_xy, camera_yaw)
         else:
