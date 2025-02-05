@@ -2,3 +2,4 @@
 data/
 video/
 traced_model.pt
+groundingdino_swint_ogc.pth
