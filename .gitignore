@@ -1,5 +1,6 @@
 # Ignore large files/folders
 data/
 video/
+outputs/
 traced_model.pt
 groundingdino_swint_ogc.pth
