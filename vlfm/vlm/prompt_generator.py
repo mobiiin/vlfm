@@ -1,13 +1,13 @@
 import re
-from typing import List, Dict, Tuple, Optional, Deque
+from typing import List, Dict, Tuple, Optional, Deque, Any
 from collections import deque
 import numpy as np
 from PIL import Image
 import json
-import torch
+import os
 
-# Import your VLMModel implementation
-from vlfm.vlm.llava_ask import VLMModelClient 
+# Import the VLMModelClient from the provided script
+from vlfm.vlm.llava_ask import VLMModelClient
 
 class PromptEngineer:
     """
@@ -17,14 +17,14 @@ class PromptEngineer:
 
     def __init__(self, model_name: str = "llava-hf/llava-v1.6-mistral-7b-hf", device: Optional[Any] = None, max_tokens: int = 4096):
         """
-        Initialize the PromptEngineer with the VLMModel.
+        Initialize the PromptEngineer with the VLMModelClient.
 
         Args:
             model_name (str): Name of the model to load.
             device (Optional[Any]): Device to run the model on (e.g., "cuda" or "cpu").
             max_tokens (int): Maximum token limit for the model's input.
         """
-        self.model = VLMModel(model_name=model_name, device=device)
+        self._vlm_client = VLMModelClient(port=int(os.environ.get("LLAVA_PORT", "12182")))
         self.conversation_history: List[Dict[str, str]] = []  # Stores the conversation history
         self.action_history: Deque[str] = deque(maxlen=10)  # Stores the last 10 actions
         self.max_tokens = max_tokens  # Maximum token limit for the model
@@ -58,9 +58,9 @@ class PromptEngineer:
         total_tokens = 0
         for entry in self.conversation_history:
             # Tokenize the prompt and response
-            prompt_tokens = self.model.processor.tokenize(entry["prompt"])
-            response_tokens = self.model.processor.tokenize(entry["response"])
-            total_tokens += len(prompt_tokens) + len(response_tokens)
+            prompt_tokens = len(entry["prompt"].split())  # Simple word count as a proxy for tokens
+            response_tokens = len(entry["response"].split())  # Simple word count as a proxy for tokens
+            total_tokens += prompt_tokens + response_tokens
         return total_tokens
 
     def detect_loop(self) -> bool:
@@ -121,44 +121,43 @@ class PromptEngineer:
         """
         if not self.conversation_history:
             # Initial prompt if no history exists
-            self.initial_prompt = 
-            ''' 
-            You are a robot navigating an indoor environment in search of a couch. 
-            The image on the left is your current observation
-            You must think step by step and ensure that all parts of your response are consistent. 
+            self.initial_prompt = ''' 
+                You are a robot navigating an indoor environment in search of a couch. 
+                The image on the left is your current observation
+                You must think step by step and ensure that all parts of your response are consistent. 
 
-            Here are the tasks:
-            1. Identify what part of the house we are about to enter (choose from: [bedroom, living room, kitchen, corridor, bathroom]).
-            2. Assess whether a couch can realistically be found in this area, based on common sense and the current observation. 
-            3. Determine the most logical next action for the robot (choose from: [go forward, go backward, turn right, turn left]). 
-            - The chosen action must prioritize exploring areas likely to contain a couch. 
-            - Avoid suggesting actions that contradict previous observations (e.g., don't explore a bathroom if couches aren't found there). 
-            - If you are in a corridor, continue your path and Try to exit the corridor and describe where it leads. 
-            4. Provide a probability score for each possible action in the following format:
-            - Go forward: [Score]
-            - Go backward: [Score]
-            - Turn right: [Score]
-            - Turn left: [Score]
+                Here are the tasks:
+                1. Identify what part of the house we are about to enter (choose from: [bedroom, living room, kitchen, corridor, bathroom]).
+                2. Assess whether a couch can realistically be found in this area, based on common sense and the current observation. 
+                3. Determine the most logical next action for the robot (choose from: [go forward, go backward, turn right, turn left]). 
+                - The chosen action must prioritize exploring areas likely to contain a couch. 
+                - Avoid suggesting actions that contradict previous observations (e.g., don't explore a bathroom if couches aren't found there). 
+                - If you are in a corridor, continue your path and Try to exit the corridor and describe where it leads. 
+                4. Provide a probability score for each possible action in the following format:
+                - Go forward: [Score]
+                - Go backward: [Score]
+                - Turn right: [Score]
+                - Turn left: [Score]
 
-            Each probability score should be a number between 0 and 1, with two decimal places of precision. 
-            - A score of 1 means full confidence that the action will lead to finding the couch. 
-            - A score of 0 means no confidence. 
+                Each probability score should be a number between 0 and 1, with two decimal places of precision. 
+                - A score of 1 means full confidence that the action will lead to finding the couch. 
+                - A score of 0 means no confidence. 
 
-            When providing your response, use this structure:
-            1. **Part of the House**: [Your answer]
-            - Reasoning: [Explain why you think this is the correct part of the house based on the observation and map.]
-            2. **Can a Couch Be Found Here?**: [Yes/No]
-            - Reasoning: [Explain why or why not.]
-            3. **Recommended Action**: [Your action]
-            - Reasoning: [Explain why this action is the most logical based on steps 1 and 2.]
-            4. **Probability Scores for Each Action**:
-            - Go forward: [Score]
-            - Go backward: [Score]
-            - Turn right: [Score]
-            - Turn left: [Score]
+                When providing your response, use this structure:
+                1. **Part of the House**: [Your answer]
+                - Reasoning: [Explain why you think this is the correct part of the house based on the observation and map.]
+                2. **Can a Couch Be Found Here?**: [Yes/No]
+                - Reasoning: [Explain why or why not.]
+                3. **Recommended Action**: [Your action]
+                - Reasoning: [Explain why this action is the most logical based on steps 1 and 2.]
+                4. **Probability Scores for Each Action**:
+                - Go forward: [Score]
+                - Go backward: [Score]
+                - Turn right: [Score]
+                - Turn left: [Score]
 
-            Important: Ensure that the recommended action aligns with the reasoning from steps 1 and 2. If a couch cannot be found in the current area, prioritize moving to areas more likely to contain a couch. 
-            '''
+                Important: Ensure that the recommended action aligns with the reasoning from steps 1 and 2. If a couch cannot be found in the current area, prioritize moving to areas more likely to contain a couch. 
+                '''
             return self.initial_prompt
 
         # Generate follow-up prompts based on the parsed answers
@@ -177,7 +176,7 @@ class PromptEngineer:
 
     def process_image_and_prompt(self, image: np.ndarray, prompt: str) -> Tuple[str, Dict[str, float]]:
         """
-        Process an image and prompt using the VLMModel.
+        Process an image and prompt using the VLMModelClient.
 
         Args:
             image (np.ndarray): The input image as a numpy array.
@@ -186,7 +185,7 @@ class PromptEngineer:
         Returns:
             Tuple[str, Dict[str, float]]: The model's response and action scores.
         """
-        response, action_scores = self.model.process_input(image, prompt)
+        response, action_scores = self._vlm_client.process_input(image, prompt)
 
         # Determine the recommended action
         parsed_response = self.parse_response(response)

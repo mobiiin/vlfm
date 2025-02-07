@@ -20,10 +20,13 @@ try:
 except Exception:
     pass
 
-from vlfm.vlm.prompt_engineer import PromptEngineer
+from vlfm.vlm.prompt_generator import PromptEngineer
+import pdb
 
 PROMPT_SEPARATOR = "|"
 
+# Initialize the dynamic prompt generator
+prompt_engineer = PromptEngineer()
 
 class BaseITMPolicy(BaseObjectNavPolicy):
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
@@ -48,7 +51,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     ):
         super().__init__(*args, **kwargs)
         self._vlm_client = VLMModelClient(port=int(os.environ.get("LLAVA_PORT", "12182"))) 
-        self._text_prompt = text_prompt
+        self._text_prompt = prompt_engineer.generate_prompt({})  #Initialize with the first dynamic prompt
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
             use_max_confidence=use_max_confidence,
@@ -193,6 +196,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
     def _update_value_map(self) -> None:
         all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
         action_scores_list = []
+        # print(np.array(all_rgb).shape)
 
         for rgb in all_rgb:
             # Get the model's response and action scores
@@ -202,6 +206,13 @@ class BaseITMPolicy(BaseObjectNavPolicy):
                 replace_word=self._target_object,  # Pass the target object as replace_word
             )
             action_scores_list.append(action_scores)
+
+
+        # Update the prompt dynamically
+        parsed_response = prompt_engineer.parse_response(response)  # Parse the model's response
+        
+        self._text_prompt = prompt_engineer.generate_prompt(parsed_response)  # Generate a new prompt
+
 
         for action_scores, (rgb, depth, tf, min_depth, max_depth, fov) in zip(
             action_scores_list, self._observations_cache["value_map_rgbd"]
