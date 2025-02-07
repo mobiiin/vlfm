@@ -19,7 +19,7 @@ from vlfm.utils.img_utils import (
     pixel_value_within_radius,
     place_img_in_img,
     rotate_image,
-)
+    )
 
 DEBUG = False
 SAVE_VISUALIZATIONS = False

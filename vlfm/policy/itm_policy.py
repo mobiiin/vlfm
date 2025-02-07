@@ -20,6 +20,8 @@ try:
 except Exception:
     pass
 
+from vlfm.vlm.prompt_engineer import PromptEngineer
+
 PROMPT_SEPARATOR = "|"
 
 

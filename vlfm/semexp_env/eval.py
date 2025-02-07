@@ -3,7 +3,7 @@
 import os
 import time
 from typing import Any, Dict, List, Tuple
-
+import pdb
 import cv2
 import numpy as np
 import torch
@@ -16,7 +16,7 @@ from vlfm.utils.img_utils import reorient_rescale_map, resize_images
 from vlfm.utils.log_saver import is_evaluated, log_episode
 from vlfm.utils.visualization import add_text_to_image
 
-from vlfm.vlm.prompt_engineer import PromptEngineer  # Import the PromptEngineer class
+from vlfm.vlm.prompt_engineer import PromptEngineer
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -76,8 +76,6 @@ def main() -> None:
 
     policy = policy_cls(**policy_kwargs)  # type: ignore
 
-    print("heerrrrrrrrrrrrerererererererererererer")
-    
     torch.set_num_threads(1)
     envs = make_vec_envs(args)
     obs, infos = envs.reset()
