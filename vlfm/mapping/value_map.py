@@ -591,6 +591,22 @@ class ValueMap(BaseMap):
         # Generate the right mask by rotating the forward mask 90 degrees clockwise
         right_mask = np.rot90(forward_mask, 3)
 
+        # Function to reduce the radius of a mask by half
+        def reduce_radius(mask):
+            center = (mask.shape[0] // 2, mask.shape[1] // 2)
+            reduced_mask = np.zeros_like(mask)
+            for row in range(mask.shape[0]):
+                for col in range(mask.shape[1]):
+                    distance = np.sqrt((row - center[0])**2 + (col - center[1])**2)
+                    if distance <= mask.shape[0] // 4:  # Reduce radius by half
+                        reduced_mask[row, col] = mask[row, col]
+            return reduced_mask
+
+        # Reduce the radius of the back, left, and right masks
+        back_mask = reduce_radius(back_mask)
+        left_mask = reduce_radius(left_mask)
+        right_mask = reduce_radius(right_mask)
+
         confidence_masks = {
             "forward": forward_mask,
             "backward": back_mask,
