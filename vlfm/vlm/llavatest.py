@@ -2,7 +2,7 @@ import numpy as np
 from PIL import Image
 import torch
 from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
-from typing import Optional, Any  
+from typing import Optional, Any, List
 
 class VLMModel:
     """Vision-Language Model for indoor navigation."""
@@ -23,19 +23,18 @@ class VLMModel:
         self.model.to(device)
         self.device = device
 
-    def process_input(self, image: np.ndarray, prompt: str) -> tuple:
+    def process_input(self, images: List[np.ndarray], prompt: str) -> tuple:
         """
-        Process the image and text prompt using the model.
+        Process the images and text prompt using the model.
 
         Args:
-            image (numpy.ndarray): The input image as a numpy array.
+            images (List[numpy.ndarray]): A list of input images as numpy arrays.
             prompt (str): The text prompt for the model.
-            replace_word (str): The word to replace "couch" with. Defaults to "chair".
 
         Returns:
             tuple: A tuple containing the model's response and a dictionary of action scores.
         """
-        pil_img = Image.fromarray(image)
+        pil_images = [Image.fromarray(image) for image in images]
          
         conversation = [
             {
@@ -43,36 +42,36 @@ class VLMModel:
                 "content": [
                     {"type": "text", "text": prompt},
                     {"type": "image"},
+                    {"type": "image"},
                 ],
             },
         ]
 
         prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
-        inputs = self.processor(pil_img, text=prompt, return_tensors="pt").to(self.device)
+        inputs = self.processor(pil_images, text=prompt, return_tensors="pt").to(self.device)
 
         with torch.inference_mode():
-            output = self.model.generate(**inputs, max_new_tokens=100, temperature=1)
+            output = self.model.generate(**inputs, max_new_tokens=300, temperature=1)
             response = self.processor.decode(output[0], skip_special_tokens=True)
 
         return response
 
-# Load your image
-image_path = "../../_topdownmappp_num.png" 
-image = np.array(Image.open(image_path))
+# Load your images
+image_path1 = "../../_topdownmappp.png" 
+image_path2 = "../../_currentview.png"  
+image1 = np.array(Image.open(image_path1))
+image2 = np.array(Image.open(image_path2))
 
 # Define your prompt
 prompt = '''
-this is a top down map. the grey parts are obstacles. 
-the yellow circle is a robot exploring the environment. 
-what number is closest to the robots location? 
-which direction is the robot headed? 
+explain what you understand from these two images. hint: the second image is the topdown view map of the house.
 '''
 
 # Initialize the VLMModel
 vlm_model = VLMModel()
 
 # Process the input
-response = vlm_model.process_input(image, prompt)
+response = vlm_model.process_input([image1, image2], prompt)
 
 # Print the results
 print("Model Response:", response)

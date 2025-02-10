@@ -46,7 +46,7 @@ class HabitatVis:
         observations: TensorDict,
         infos: List[Dict[str, Any]],
         policy_info: List[Dict[str, Any]],
-    ) -> None:
+    ) -> np.ndarray:  # Return the obstacle map
         assert len(infos) == 1, "Only support one environment for now"
 
         if "annotated_depth" in policy_info[0]:
@@ -64,6 +64,7 @@ class HabitatVis:
         else:
             rgb = observations["rgb"][0].cpu().numpy()
         self.rgb.append(rgb)
+        # cv2.imwrite("_currentview.png", rgb)
 
         # Visualize target point cloud on the map
         color_point_cloud_on_map(infos, policy_info)
@@ -79,8 +80,8 @@ class HabitatVis:
             self.using_vis_maps = True
             self.vis_maps.append(vis_map_imgs)
 
-        save_frame(vis_map_imgs[0])
-        cv2.imwrite("_topdownmappp.png", vis_map_imgs[0])
+        # save_frame(vis_map_imgs[0])
+        # cv2.imwrite("_topdownmappp.png", vis_map_imgs[0])
 
         text = [
             policy_info[0][text_key]
@@ -88,6 +89,11 @@ class HabitatVis:
             if text_key in policy_info[0]
         ]
         self.texts.append(text)
+
+        if "obstacle_map" in policy_info[0]:
+            obstacle_map = policy_info[0]["obstacle_map"]
+            return obstacle_map  # Return the obstacle map
+        return None
 
     def flush_frames(self, failure_cause: str) -> List[np.ndarray]:
         """Flush all frames and return them"""

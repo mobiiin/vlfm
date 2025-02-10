@@ -47,6 +47,25 @@ class PromptEngineer:
             # Remove the second prompt and response (keep the initial prompt)
             self.conversation_history.pop(1)
 
+    def _format_history(self) -> str:
+        """
+        Format the conversation history and action history into a readable string.
+
+        Returns:
+            str: A formatted string containing the conversation and action history.
+        """
+        history_str = "### Conversation History:\n"
+        for i, entry in enumerate(self.conversation_history):
+            history_str += f"Turn {i + 1}:\n"
+            history_str += f"  - Prompt: {entry['prompt']}\n"
+            history_str += f"  - Response: {entry['response']}\n"
+        
+        history_str += "\n### Action History:\n"
+        for i, action in enumerate(self.action_history):
+            history_str += f"Turn {i + 1}: {action}\n"
+        
+        return history_str
+
     def _calculate_token_usage(self) -> int:
         """
         Calculate the total token usage of the conversation history.
@@ -70,6 +89,7 @@ class PromptEngineer:
         Returns:
             bool: True if a loop is detected, False otherwise.
         """
+
         if len(self.action_history) < 4:
             return False  # Not enough actions to detect a loop
 
@@ -111,7 +131,8 @@ class PromptEngineer:
 
     def generate_prompt(self, parsed_response: Dict[str, str]) -> str:
         """
-        Generate a new prompt based on the parsed answers from the model's response.
+        Generate a new prompt based on the parsed answers from the model's response,
+        including the conversation and action history.
 
         Args:
             parsed_response (Dict[str, str]): The parsed answers from the model's response.
@@ -133,6 +154,7 @@ class PromptEngineer:
                 - The chosen action must prioritize exploring areas likely to contain a couch. 
                 - Avoid suggesting actions that contradict previous observations (e.g., don't explore a bathroom if couches aren't found there). 
                 - If you are in a corridor, continue your path and Try to exit the corridor and describe where it leads. 
+                - Make Sure the robot isn't stuck in an action loop
                 4. Provide a probability score for each possible action in the following format:
                 - Go forward: [Score]
                 - Go backward: [Score]
@@ -161,20 +183,23 @@ class PromptEngineer:
             return self.initial_prompt
 
         # Generate follow-up prompts based on the parsed answers
-        part_of_house = parsed_response["part_of_house"]
-        target_object_found = parsed_response["target_object_found"]
-        recommended_action = parsed_response["recommended_action"]
+        # part_of_house = parsed_response["part_of_house"]
+        # target_object_found = parsed_response["target_object_found"]
+        # recommended_action = parsed_response["recommended_action"]
 
-        if part_of_house and "corridor" in part_of_house.lower():
-            return "You are in a corridor. What do you see ahead? Try to exit the corridor and describe where it leads."
-        elif part_of_house and "room" in part_of_house.lower():
-            return "You are in a room. Describe the room and look for exits."
-        elif target_object_found and "yes" in target_object_found.lower():
-            return "The target object is found here. Describe the surroundings of the target object."
-        else:
-            return "Continue exploring and describe what you see."
+        # Include the conversation and action history in the prompt
+        history_str = self._format_history()
 
-    def process_image_and_prompt(self, image: np.ndarray, prompt: str) -> Tuple[str, Dict[str, float]]:
+        # if part_of_house and "corridor" in part_of_house.lower():
+        #     return f"{history_str}\n You are in a corridor. What do you see ahead? Try to exit the corridor and describe where it leads."
+        # elif part_of_house and "room" in part_of_house.lower():
+        #     return f"{history_str}\nYou are in a room. Describe the room and look for exits."
+        # elif target_object_found and "yes" in target_object_found.lower():
+        #     return f"{history_str}\nThe target object is found here. Describe the surroundings of the target object."
+        # else:
+        return f"{history_str}\nContinue exploring."
+
+    def process_image_and_prompt(self, image: np.ndarray, prompt: str, target_object: str = "chair") -> Tuple[str, Dict[str, float]]:
         """
         Process an image and prompt using the VLMModelClient.
 
@@ -185,7 +210,7 @@ class PromptEngineer:
         Returns:
             Tuple[str, Dict[str, float]]: The model's response and action scores.
         """
-        response, action_scores = self._vlm_client.process_input(image, prompt)
+        response, action_scores = self._vlm_client.process_input(image, prompt, target_object)
 
         # Determine the recommended action
         parsed_response = self.parse_response(response)
@@ -193,8 +218,13 @@ class PromptEngineer:
 
         # Check for looping behavior
         if self.detect_loop():
-            print("Loop detected! Overriding recommended action to 'Go forward'.")
-            recommended_action = "Go forward"  # Override the action to break the loop
+            if self.action_history:  # If there is action history, revert to the last action
+                last_action = self.action_history[-1]  # Get the last action from the history
+                print(f"Loop detected! Reverting to the last action: {last_action}.")
+                recommended_action = last_action
+            else:  # If no action history exists, default to "Go forward"
+                print("Loop detected! No previous actions found. Defaulting to 'Go forward'.")
+                recommended_action = "Go forward"
 
         # Add the prompt, response, and action to the history
         self.add_to_history(prompt, response, recommended_action)
