@@ -18,7 +18,6 @@ try:
 except ModuleNotFoundError:
     print("Could not import transformers. This is OK if you are only using the client.")
 
-
 class VLMModel:
     """Vision-Language Model for indoor navigation."""
 
@@ -38,12 +37,13 @@ class VLMModel:
         self.model.to(device)
         self.device = device
 
-    def process_input(self, image: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, image2: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
         """
-        Process the image and text prompt using the model.
+        Process the images and text prompt using the model.
 
         Args:
-            image (numpy.ndarray): The input image as a numpy array.
+            image1 (numpy.ndarray): The first input image as a numpy array.
+            image2 (numpy.ndarray): The second input image as a numpy array.
             prompt (str): The text prompt for the model.
             replace_word (str): The word to replace "couch" with. Defaults to "chair".
 
@@ -53,20 +53,22 @@ class VLMModel:
         # Replace "couch" (case-insensitive) with the specified word in the prompt
         updated_prompt = re.sub(r"couch", replace_word, prompt, flags=re.IGNORECASE)
 
-        pil_img = Image.fromarray(image)
-         
+        pil_img1 = Image.fromarray(image1)
+        pil_img2 = Image.fromarray(image2)
+
         conversation = [
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": updated_prompt},
                     {"type": "image"},
+                    {"type": "image"},
                 ],
             },
         ]
 
         prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
-        inputs = self.processor(pil_img, text=prompt, return_tensors="pt").to(self.device)
+        inputs = self.processor([pil_img1, pil_img2], text=prompt, return_tensors="pt").to(self.device)
 
         with torch.inference_mode():
             output = self.model.generate(**inputs, max_new_tokens=300, temperature=1)
@@ -84,69 +86,83 @@ class VLMModelClient:
     def __init__(self, port: int = 12182):
         self.url = f"http://localhost:{port}/vlm"
 
-    def process_input(self, image: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, image2: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
         """
-        Send the image and text prompt to the server and get the model's response.
+        Send the images and text prompt to the server and get the model's response.
 
         Args:
-            image (numpy.ndarray): The input image as a numpy array.
+            image1 (numpy.ndarray): The first input image as a numpy array.
+            image2 (numpy.ndarray): The second input image as a numpy array.
             prompt (str): The text prompt for the model.
             replace_word (str): The word to replace "couch" with. Defaults to "chair".
 
         Returns:
             tuple: A tuple containing the model's response and a dictionary of action scores.
         """
-        # getting obstacle maps
-        # topdown_obstacle_frames = get_last_frames()
-        # if frames is not None: 
-        #     cv2.imwrite("_topdownmappp.png", frames[0])  
-        # print(f"VLMModelClient.process_input: {image.shape}, {prompt}, replace_word={replace_word}")
-        response = send_request(self.url, image=image, prompt=prompt, replace_word=replace_word)
-        print("VLM Model Response:", response)
-        return response["response"], response["action_scores"]
+        try:
+            response = self.send_request(self.url, image1=image1, image2=image2, prompt=prompt, replace_word=replace_word)
+            print("VLM Model Response:", response)
+            return response["response"], response["action_scores"]
+        except Exception as e:
+            print(f"Error processing input: {e}")
+            return "", {}  # Return empty response and action scores
 
+    def send_request(self, url: str, **kwargs) -> dict:
+        """
+        Send a request to the server with the images, prompt, and replace_word.
 
-def send_request(url: str, **kwargs) -> dict:
-    """
-    Send a request to the server with the image, prompt, and replace_word.
+        Args:
+            url (str): The server URL.
+            **kwargs: Keyword arguments including 'image1', 'image2', 'prompt', and 'replace_word'.
 
-    Args:
-        url (str): The server URL.
-        **kwargs: Keyword arguments including 'image', 'prompt', and 'replace_word'.
+        Returns:
+            dict: The server's response containing the model's response and action scores.
+        """
+        # Convert the images to base64-encoded strings
+        image1 = kwargs.get("image1")
+        image2 = kwargs.get("image2")
+        prompt = kwargs.get("prompt")
+        replace_word = kwargs.get("replace_word")
 
-    Returns:
-        dict: The server's response containing the model's response and action scores.
-    """
-    # Convert the image to a base64-encoded string
-    image = kwargs.get("image")
-    prompt = kwargs.get("prompt")
-    replace_word = kwargs.get("replace_word")
+        pil_img1 = Image.fromarray(image1)
+        pil_img2 = Image.fromarray(image2)
 
-    pil_img = Image.fromarray(image)
-    buffered = BytesIO()
-    pil_img.save(buffered, format="PNG")
-    img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        buffered1 = BytesIO()
+        buffered2 = BytesIO()
 
-    # Prepare the JSON payload
-    payload = {
-        "image": img_base64,
-        "txt": prompt,
-        "replace_word": replace_word,  # Add replace_word to the payload
-    }
+        pil_img1.save(buffered1, format="PNG")
+        pil_img2.save(buffered2, format="PNG")
 
-    # Set the headers to indicate JSON content
-    headers = {
-        "Content-Type": "application/json"
-    }
+        img_base64_1 = base64.b64encode(buffered1.getvalue()).decode("utf-8")
+        img_base64_2 = base64.b64encode(buffered2.getvalue()).decode("utf-8")
 
-    # Send the request to the server
-    response = requests.post(url, data=json.dumps(payload), headers=headers)
-    
-    # Print the raw response for debugging
-    # print("Raw response:", response.text)
-    
-    # Return the JSON response
-    return response.json()
+        # Prepare the JSON payload
+        payload = {
+            "image1": img_base64_1,
+            "image2": img_base64_2,
+            "txt": prompt,
+            "replace_word": replace_word,  # Add replace_word to the payload
+        }
+
+        # Set the headers to indicate JSON content
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        # Send the request to the server
+        response = requests.post(url, data=json.dumps(payload), headers=headers)
+        
+        # Debugging: Print the raw response and status code
+        print("Status Code:", response.status_code)
+        print("Raw Response:", response.text)
+
+        # Check if the response is valid JSON
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            print(f"JSONDecodeError: {e}")
+            print("Response is not valid JSON.")
+            return {"response": "", "action_scores": {}}
 
 
 if __name__ == "__main__":
@@ -160,10 +176,11 @@ if __name__ == "__main__":
 
     class VLMModelServer(ServerMixin, VLMModel):
         def process_payload(self, payload: dict) -> dict:
-            image = str_to_image(payload["image"])
+            image1 = str_to_image(payload["image1"])
+            image2 = str_to_image(payload["image2"])
             prompt = payload["txt"]
             replace_word = payload.get("replace_word", "chair")  # Default to "chair" if not provided
-            response, action_scores = self.process_input(image, prompt, replace_word=replace_word)
+            response, action_scores = self.process_input(image1, image2, prompt, replace_word=replace_word)
             return {"response": response, "action_scores": action_scores}
 
     vlm = VLMModelServer()

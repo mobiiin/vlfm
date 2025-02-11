@@ -144,7 +144,8 @@ class PromptEngineer:
             # Initial prompt if no history exists
             self.initial_prompt = ''' 
                 You are a robot navigating an indoor environment in search of a couch. 
-                The image on the left is your current observation
+                The first image is your current observation and the second image is a top downview obstacle map of the environment. 
+                The grey areas are obstacles and The robots direction is visible with an arrow.
                 You must think step by step and ensure that all parts of your response are consistent. 
 
                 Here are the tasks:
@@ -199,18 +200,20 @@ class PromptEngineer:
         # else:
         return f"{history_str}\nContinue exploring."
 
-    def process_image_and_prompt(self, image: np.ndarray, prompt: str, target_object: str = "chair") -> Tuple[str, Dict[str, float]]:
+    def process_image_and_prompt(self, image1: np.ndarray, image2: np.ndarray, prompt: str, target_object: str = "chair") -> Tuple[str, Dict[str, float]]:
         """
-        Process an image and prompt using the VLMModelClient.
+        Process two images and a prompt using the VLMModelClient.
 
         Args:
-            image (np.ndarray): The input image as a numpy array.
+            image1 (np.ndarray): The first input image as a numpy array.
+            image2 (np.ndarray): The second input image as a numpy array.
             prompt (str): The text prompt for the model.
 
         Returns:
             Tuple[str, Dict[str, float]]: The model's response and action scores.
         """
-        response, action_scores = self._vlm_client.process_input(image, prompt, target_object)
+        # Pass both images to the VLMModelClient
+        response, action_scores = self._vlm_client.process_input(image1, image2, prompt, target_object)
 
         # Determine the recommended action
         parsed_response = self.parse_response(response)

@@ -12,7 +12,6 @@ from vlfm.mapping.value_map import ValueMap
 from vlfm.policy.base_objectnav_policy import BaseObjectNavPolicy
 from vlfm.policy.utils.acyclic_enforcer import AcyclicEnforcer
 from vlfm.utils.geometry_utils import closest_point_within_threshold
-# from vlfm.vlm.llava_ask import VLMModelClient  
 from vlfm.vlm.detections import ObjectDetections
 
 try:
@@ -205,14 +204,11 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             # Get the model's response and action scores
             response, action_scores = self._prompt_engineer.process_image_and_prompt(
                 rgb,
+                self._observations_cache["obstacle_map"],
                 self._text_prompt,
-                target_object=self._target_object,  # Pass the target object as replace_word
+                target_object=self._target_object,
             )
-            # response, action_scores = self._vlm_client.process_input(
-            #     rgb,
-            #     self._text_prompt,
-            #     replace_word=self._target_object,  # Pass the target object as replace_word
-            # )
+            
             action_scores_list.append(action_scores)
 
 

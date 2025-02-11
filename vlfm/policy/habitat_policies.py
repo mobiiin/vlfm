@@ -171,75 +171,75 @@ class HabitatMixin:
         info["start_yaw"] = self._start_yaw
         return info
 
-def _cache_observations(self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict) -> None:
-    """Caches the rgb, depth, and camera transform from the observations.
+    def _cache_observations(self: Union["HabitatMixin", BaseObjectNavPolicy], observations: TensorDict) -> None:
+        """Caches the rgb, depth, and camera transform from the observations.
 
-    Args:
-       observations (TensorDict): The observations from the current timestep.
-    """
-    if len(self._observations_cache) > 0:
-        return
-    rgb = observations["rgb"][0].cpu().numpy()
-    depth = observations["depth"][0].cpu().numpy()
-    x, y = observations["gps"][0].cpu().numpy()
-    camera_yaw = observations["compass"][0].cpu().item()
-    depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
-    # Habitat GPS makes west negative, so flip y
-    camera_position = np.array([x, -y, self._camera_height])
-    robot_xy = camera_position[:2]
-    tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
+        Args:
+        observations (TensorDict): The observations from the current timestep.
+        """
+        if len(self._observations_cache) > 0:
+            return
+        rgb = observations["rgb"][0].cpu().numpy()
+        depth = observations["depth"][0].cpu().numpy()
+        x, y = observations["gps"][0].cpu().numpy()
+        camera_yaw = observations["compass"][0].cpu().item()
+        depth = filter_depth(depth.reshape(depth.shape[:2]), blur_type=None)
+        # Habitat GPS makes west negative, so flip y
+        camera_position = np.array([x, -y, self._camera_height])
+        robot_xy = camera_position[:2]
+        tf_camera_to_episodic = xyz_yaw_to_tf_matrix(camera_position, camera_yaw)
 
-    self._obstacle_map: ObstacleMap
-    if self._compute_frontiers:
-        self._obstacle_map.update_map(
-            depth,
-            tf_camera_to_episodic,
-            self._min_depth,
-            self._max_depth,
-            self._fx,
-            self._fy,
-            self._camera_fov,
-        )
-        # Add the obstacle map to the observations cache
-        obstacle_map_np = self._obstacle_map.visualize()  # Returns a numpy array
-        frontiers = self._obstacle_map.frontiers
-        self._obstacle_map.update_agent_traj(robot_xy, camera_yaw)
-    else:
-        if "frontier_sensor" in observations:
-            frontiers = observations["frontier_sensor"][0].cpu().numpy()
-        else:
-            frontiers = np.array([])
-        obstacle_map_np = None  # No obstacle map if frontiers are not computed
-
-    self._observations_cache = {
-        "frontier_sensor": frontiers,
-        "nav_depth": observations["depth"],  # for pointnav
-        "robot_xy": robot_xy,
-        "robot_heading": camera_yaw,
-        "object_map_rgbd": [
-            (
-                rgb,
+        self._obstacle_map: ObstacleMap
+        if self._compute_frontiers:
+            self._obstacle_map.update_map(
                 depth,
                 tf_camera_to_episodic,
                 self._min_depth,
                 self._max_depth,
                 self._fx,
                 self._fy,
-            )
-        ],
-        "value_map_rgbd": [
-            (
-                rgb,
-                depth,
-                tf_camera_to_episodic,
-                self._min_depth,
-                self._max_depth,
                 self._camera_fov,
             )
-        ],
-        "habitat_start_yaw": observations["heading"][0].item(),
-        "obstacle_map": obstacle_map_np,  # Add the obstacle map to the cache
-    }
+            # Add the obstacle map to the observations cache
+            obstacle_map_np = self._obstacle_map.visualize()  # Returns a numpy array
+            frontiers = self._obstacle_map.frontiers
+            self._obstacle_map.update_agent_traj(robot_xy, camera_yaw)
+        else:
+            if "frontier_sensor" in observations:
+                frontiers = observations["frontier_sensor"][0].cpu().numpy()
+            else:
+                frontiers = np.array([])
+            obstacle_map_np = None  # No obstacle map if frontiers are not computed
+
+        self._observations_cache = {
+            "frontier_sensor": frontiers,
+            "nav_depth": observations["depth"],  # for pointnav
+            "robot_xy": robot_xy,
+            "robot_heading": camera_yaw,
+            "object_map_rgbd": [
+                (
+                    rgb,
+                    depth,
+                    tf_camera_to_episodic,
+                    self._min_depth,
+                    self._max_depth,
+                    self._fx,
+                    self._fy,
+                )
+            ],
+            "value_map_rgbd": [
+                (
+                    rgb,
+                    depth,
+                    tf_camera_to_episodic,
+                    self._min_depth,
+                    self._max_depth,
+                    self._camera_fov,
+                )
+            ],
+            "habitat_start_yaw": observations["heading"][0].item(),
+            "obstacle_map": obstacle_map_np,  # Add the obstacle map to the cache
+        }
 
 
 @baseline_registry.register_policy
