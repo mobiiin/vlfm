@@ -14,8 +14,8 @@ try:
     from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 except ModuleNotFoundError:
     print("Could not import transformers. This is OK if you are only using the client.")
-from huggingface_hub import login
-login(token="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")
+
+
 
 
 class VLMModel:
