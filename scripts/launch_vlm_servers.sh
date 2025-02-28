@@ -11,7 +11,7 @@ export GROUNDING_DINO_CONFIG=${GROUNDING_DINO_CONFIG:-GroundingDINO/groundingdin
 export GROUNDING_DINO_WEIGHTS=${GROUNDING_DINO_WEIGHTS:-data/groundingdino_swint_ogc.pth}
 export CLASSES_PATH=${CLASSES_PATH:-vlfm/vlm/classes.txt}
 export GROUNDING_DINO_PORT=${GROUNDING_DINO_PORT:-12181}
-export LLAVA_PORT=${LLAVA_PORT:-12182}
+export VLM_PORT=${VLM_PORT:-12182}
 export SAM_PORT=${SAM_PORT:-12183}
 export YOLOV7_PORT=${YOLOV7_PORT:-12184}
 
@@ -29,7 +29,7 @@ tmux split-window -h -t ${session_name}:0.2
 
 # Run commands in each pane
 tmux send-keys -t ${session_name}:0.0 "${VLFM_PYTHON} -m vlfm.vlm.grounding_dino --port ${GROUNDING_DINO_PORT}" C-m
-tmux send-keys -t ${session_name}:0.1 "${VLFM_PYTHON} -m vlfm.vlm.llava_ask --port ${LLAVA_PORT}" C-m
+tmux send-keys -t ${session_name}:0.1 "${VLFM_PYTHON} -m vlfm.vlm.vlm_ask --port ${VLM_PORT}" C-m
 tmux send-keys -t ${session_name}:0.2 "${VLFM_PYTHON} -m vlfm.vlm.sam --port ${SAM_PORT}" C-m
 tmux send-keys -t ${session_name}:0.3 "${VLFM_PYTHON} -m vlfm.vlm.yolov7 --port ${YOLOV7_PORT}" C-m
 

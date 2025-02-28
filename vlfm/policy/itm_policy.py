@@ -22,7 +22,7 @@ except Exception:
 from vlfm.vlm.prompt_generator import PromptEngineer
 import pdb
 from vlfm.utils.habitat_visualizer import HabitatVis
-
+from vlfm.utils.vram_tracker import GPUMemoryTracker
 PROMPT_SEPARATOR = "|"
 
 
@@ -50,7 +50,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         super().__init__(*args, **kwargs)
         self._prompt_engineer = PromptEngineer()  # Initialize the dynamic prompt generator
         # self._vlm_client = VLMModelClient(port=int(os.environ.get("LLAVA_PORT", "12182"))) 
-        self._text_prompt = self._prompt_engineer.generate_prompt({})  #Initialize with the first dynamic prompt
+        self._text_prompt = self._prompt_engineer.generate_prompt()  #Initialize with the first dynamic prompt
         self._habitat_vis = HabitatVis()
         self._value_map: ValueMap = ValueMap(
             value_channels=len(text_prompt.split(PROMPT_SEPARATOR)),
@@ -58,6 +58,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             obstacle_map=self._obstacle_map if sync_explored_areas else None,
         )
         self._acyclic_enforcer = AcyclicEnforcer()
+        # self._tracker = GPUMemoryTracker()  # Initialize the memory tracker
 
     def _reset(self) -> None:
         super()._reset()
@@ -198,25 +199,25 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         all_rgb = [i[0] for i in self._observations_cache["value_map_rgbd"]]
         action_scores_list = []
         
-        cv2.imwrite("_obstaclemappppp.png", self._observations_cache["obstacle_map"])
+        # cv2.imwrite("_obstaclemappppp.png", self._observations_cache["obstacle_map"])
 
         for rgb in all_rgb:
             # Get the model's response and action scores
             response, action_scores = self._prompt_engineer.process_image_and_prompt(
                 rgb,
-                self._observations_cache["obstacle_map"],
+                # self._observations_cache["obstacle_map"],
                 self._text_prompt,
                 target_object=self._target_object,
             )
             
             action_scores_list.append(action_scores)
 
+        del self._observations_cache["obstacle_map"]
 
         # Update the prompt dynamically
-        parsed_response = self._prompt_engineer.parse_response(response)  # Parse the model's response
+        # parsed_response = self._prompt_engineer.parse_response(response)  # Parse the model's response
         
-        self._text_prompt = self._prompt_engineer.generate_prompt(parsed_response)  # Generate a new prompt
-
+        self._text_prompt = self._prompt_engineer.generate_prompt()  # Generate a new prompt
 
         for action_scores, (rgb, depth, tf, min_depth, max_depth, fov) in zip(
             action_scores_list, self._observations_cache["value_map_rgbd"]

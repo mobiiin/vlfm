@@ -11,7 +11,7 @@ import cv2
 
 from .server_wrapper import ServerMixin, host_model, str_to_image
 
-from vlfm.utils.frame_saver import get_last_frames
+# from vlfm.utils.frame_saver import get_last_frames
 
 try:
     from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
@@ -37,13 +37,13 @@ class VLMModel:
         self.model.to(device)
         self.device = device
 
-    def process_input(self, image1: np.ndarray, image2: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, image2: Optional[np.ndarray] = None, prompt: str, replace_word: str = "chair") -> tuple:
         """
         Process the images and text prompt using the model.
 
         Args:
             image1 (numpy.ndarray): The first input image as a numpy array.
-            image2 (numpy.ndarray): The second input image as a numpy array.
+            image2 (Optional[numpy.ndarray]): The second input image as a numpy array. Defaults to None.
             prompt (str): The text prompt for the model.
             replace_word (str): The word to replace "couch" with. Defaults to "chair".
 
@@ -54,21 +54,24 @@ class VLMModel:
         updated_prompt = re.sub(r"couch", replace_word, prompt, flags=re.IGNORECASE)
 
         pil_img1 = Image.fromarray(image1)
-        pil_img2 = Image.fromarray(image2)
+        images = [pil_img1]
+
+        if image2 is not None:
+            pil_img2 = Image.fromarray(image2)
+            images.append(pil_img2)
 
         conversation = [
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": updated_prompt},
-                    {"type": "image"},
-                    {"type": "image"},
+                    *[{"type": "image"} for _ in images],
                 ],
             },
         ]
 
         prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
-        inputs = self.processor([pil_img1, pil_img2], text=prompt, return_tensors="pt").to(self.device)
+        inputs = self.processor(images, text=prompt, return_tensors="pt").to(self.device)
 
         with torch.inference_mode():
             output = self.model.generate(**inputs, max_new_tokens=300, temperature=1)
@@ -79,6 +82,9 @@ class VLMModel:
         matches = re.findall(pattern, response)
         action_scores = {action: float(score) for action, score, _ in matches}
 
+        # Clear CUDA cache
+        torch.cuda.empty_cache()
+        
         return response, action_scores
 
 
@@ -86,13 +92,13 @@ class VLMModelClient:
     def __init__(self, port: int = 12182):
         self.url = f"http://localhost:{port}/vlm"
 
-    def process_input(self, image1: np.ndarray, image2: np.ndarray, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, image2: Optional[np.ndarray] = None, prompt: str, replace_word: str = "chair") -> tuple:
         """
         Send the images and text prompt to the server and get the model's response.
 
         Args:
             image1 (numpy.ndarray): The first input image as a numpy array.
-            image2 (numpy.ndarray): The second input image as a numpy array.
+            image2 (Optional[numpy.ndarray]): The second input image as a numpy array. Defaults to None.
             prompt (str): The text prompt for the model.
             replace_word (str): The word to replace "couch" with. Defaults to "chair".
 
@@ -101,7 +107,6 @@ class VLMModelClient:
         """
         try:
             response = self.send_request(self.url, image1=image1, image2=image2, prompt=prompt, replace_word=replace_word)
-            print("VLM Model Response:", response)
             return response["response"], response["action_scores"]
         except Exception as e:
             print(f"Error processing input: {e}")
@@ -125,24 +130,27 @@ class VLMModelClient:
         replace_word = kwargs.get("replace_word")
 
         pil_img1 = Image.fromarray(image1)
-        pil_img2 = Image.fromarray(image2)
+        images = [pil_img1]
 
-        buffered1 = BytesIO()
-        buffered2 = BytesIO()
+        if image2 is not None:
+            pil_img2 = Image.fromarray(image2)
+            images.append(pil_img2)
 
-        pil_img1.save(buffered1, format="PNG")
-        pil_img2.save(buffered2, format="PNG")
-
-        img_base64_1 = base64.b64encode(buffered1.getvalue()).decode("utf-8")
-        img_base64_2 = base64.b64encode(buffered2.getvalue()).decode("utf-8")
+        buffered_images = []
+        for img in images:
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            buffered_images.append(base64.b64encode(buffered.getvalue()).decode("utf-8"))
 
         # Prepare the JSON payload
         payload = {
-            "image1": img_base64_1,
-            "image2": img_base64_2,
+            "image1": buffered_images[0],
             "txt": prompt,
             "replace_word": replace_word,  # Add replace_word to the payload
         }
+
+        if len(buffered_images) > 1:
+            payload["image2"] = buffered_images[1]
 
         # Set the headers to indicate JSON content
         headers = {
@@ -177,7 +185,7 @@ if __name__ == "__main__":
     class VLMModelServer(ServerMixin, VLMModel):
         def process_payload(self, payload: dict) -> dict:
             image1 = str_to_image(payload["image1"])
-            image2 = str_to_image(payload["image2"])
+            image2 = str_to_image(payload["image2"]) if "image2" in payload else None
             prompt = payload["txt"]
             replace_word = payload.get("replace_word", "chair")  # Default to "chair" if not provided
             response, action_scores = self.process_input(image1, image2, prompt, replace_word=replace_word)

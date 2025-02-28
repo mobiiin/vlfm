@@ -3,7 +3,7 @@ import requests
 import numpy as np
 from PIL import Image
 
-from llava_ask import VLMModelClient
+from vlm_ask import VLMModelClient
 import pdb
 
 test_image_path = "/home/mhabibp/Pictures/Screenshots/habitat1.png"
