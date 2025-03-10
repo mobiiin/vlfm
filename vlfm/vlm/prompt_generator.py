@@ -15,7 +15,7 @@ class PromptEngineer:
     It maintains conversation history, manages token limits, and generates context-aware prompts.
     """
 
-    def __init__(self, model_name: str = "llava-hf/llava-v1.6-mistral-7b-hf", device: Optional[Any] = None, max_tokens: int = 4096):
+    def __init__(self, device: Optional[Any] = None, max_tokens: int = 4096):
         """
         Initialize the PromptEngineer with the VLMModelClient.
 
@@ -24,22 +24,19 @@ class PromptEngineer:
             device (Optional[Any]): Device to run the model on (e.g., "cuda" or "cpu").
             max_tokens (int): Maximum token limit for the model's input.
         """
-        self._vlm_client = VLMModelClient(port=int(os.environ.get("LLAVA_PORT", "12182")))
+        self._vlm_client = VLMModelClient(port=int(os.environ.get("VLM_PORT", "12182")))
         self.conversation_history: List[Dict[str, str]] = []  # Stores the conversation history
         self.action_history: Deque[str] = deque(maxlen=10)  # Stores the last 10 actions
+        self.previous_action_scores: Optional[Dict[str, float]] = None  # Stores the previous action scores
         self.max_tokens = max_tokens  # Maximum token limit for the model
         self.initial_prompt: Optional[str] = None  # Stores the initial prompt (main objective)
 
-    def add_to_history(self, prompt: str, response: str, action: str) -> None:
+    def add_to_history(self, action: str, action_scores: Dict[str, float]) -> None:
         """
-        Add a prompt, response, and action to the conversation and action history.
-
-        Args:
-            prompt (str): The user's prompt.
-            response (str): The model's response.
-            action (str): The action taken by the robot.
+        Add an action and its corresponding action scores to the history.
         """
         self.action_history.append(action)
+        self.previous_action_scores = action_scores  # Save the action scores
 
     def _format_history(self) -> str:
         """
@@ -62,20 +59,36 @@ class PromptEngineer:
 
     def detect_loop(self) -> bool:
         """
-        Detect if the robot is stuck in a loop based on the action history.
-
-        Returns:
-            bool: True if a loop is detected, False otherwise.
+        Detect if the robot is stuck in a loop of specific sequences:
+        - left-forward-left-forward
+        - right-forward-right-forward
+        - left-right-left-right
+        - forward-backward-forward-backward
+        - forward-left-forward-left
+        - forward-right-forward-right
         """
         if len(self.action_history) < 4:
             return False  # Not enough actions to detect a loop
 
-        # Check for repeating patterns in the action history
+        # Convert the last 4 actions to a list for easier checking
         last_four_actions = list(self.action_history)[-4:]
-        if last_four_actions[0] == last_four_actions[2] and last_four_actions[1] == last_four_actions[3]:
-            return True  # Loop detected (e.g., "Turn left → Turn right → Turn left → Turn right")
 
-        return False
+        # Define the patterns to detect
+        patterns = [
+            ["turn left", "go forward", "turn left", "go forward"],  # left-forward-left-forward
+            ["turn right", "go forward", "turn right", "go forward"],  # right-forward-right-forward
+            ["turn left", "turn right", "turn left", "turn right"],  # left-right-left-right
+            ["go forward", "go backward", "go forward", "go backward"],  # forward-backward-forward-backward
+            ["go forward", "turn left", "go forward", "turn left"],  # forward-left-forward-left
+            ["go forward", "turn right", "go forward", "turn right"],  # forward-right-forward-right
+        ]
+
+        # Check if the last 4 actions match any of the patterns
+        for pattern in patterns:
+            if last_four_actions == pattern:
+                return True  # Loop detected
+
+        return False  # No loop detected
 
     def parse_response(self, action_scores: Dict[str, float], response: Optional[str] = None) -> Dict[str, str]:
         """
@@ -173,6 +186,30 @@ class PromptEngineer:
         # Combine the initial prompt and the last 10 actions
         return f"{self.initial_prompt}\n{history_str}\nContinue exploring."
 
+
+    def validate_image(self, image: np.ndarray, name: str = "image") -> None:
+        if not isinstance(image, np.ndarray):
+            raise ValueError(f"{name} must be a NumPy array.")
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError(f"{name} must be a 3D array with shape (height, width, 3).")
+        if image.dtype != np.uint8:
+            raise ValueError(f"{name} must have dtype uint8.")
+
+
+    def validate_prompt(self, prompt: str) -> None:
+        if not isinstance(prompt, str):
+            raise ValueError("Prompt must be a string.")
+        if not prompt.strip():
+            raise ValueError("Prompt cannot be empty.")
+
+
+    def validate_target_object(self, target_object: str) -> None:
+        if not isinstance(target_object, str):
+            raise ValueError("Target object must be a string.")
+        if not target_object.strip():
+            raise ValueError("Target object cannot be empty.") 
+
+
     def process_image_and_prompt(self, image1: np.ndarray, prompt: str, target_object: str = "chair", image2: Optional[np.ndarray] = None,) -> Tuple[str, Dict[str, float]]:
         """
         Process one or two images and a prompt using the VLMModelClient.
@@ -187,7 +224,16 @@ class PromptEngineer:
             Tuple[str, Dict[str, float]]: The model's response and action scores.
         """
         # Pass the images to the VLMModelClient (image2 is optional)
-        response, action_scores = self._vlm_client.process_input(image1, image2, prompt, target_object)
+        
+        if image2 is not None:
+            # self.validate_image(image1, "image1")
+            # self.validate_image(image2, "image2")
+            # self.validate_target_object(target_object)
+            response, action_scores = self._vlm_client.process_input(image1=image1, image2=image2, prompt=prompt, replace_word=target_object)
+        else:
+            # self.validate_image(image1, "image1")
+            # self.validate_target_object(target_object)
+            response, action_scores = self._vlm_client.process_input(image1=image1, prompt=prompt, replace_word=target_object)
 
         # Determine the recommended action
         parsed_response = self.parse_response(action_scores=action_scores)
@@ -203,10 +249,13 @@ class PromptEngineer:
                 print("Loop detected! No previous actions found. Defaulting to 'Go forward'.")
                 recommended_action = "Go forward"
 
-        # Add the prompt, response, and action to the history
-        self.add_to_history(prompt, response, recommended_action)
+            self.add_to_history(recommended_action, self.previous_action_scores)
+            return response, self.previous_action_scores
 
-        return response, action_scores
+        else: # If no loop detected
+            # Add the prompt, response, and action to the history
+            self.add_to_history(recommended_action, action_scores)
+            return response, action_scores
 
     def save_conversation_history(self, file_path: str) -> None:
         """

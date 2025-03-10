@@ -7,8 +7,9 @@ import torch
 import torchvision.transforms.functional as F
 
 from vlfm.vlm.detections import ObjectDetections
-
+# from detections import ObjectDetections
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+# from server_wrapper import ServerMixin, host_model, send_request, str_to_image
 
 try:
     from groundingdino.util.inference import load_model, predict
