@@ -3,4 +3,5 @@ data/
 video/
 outputs/
 traced_model.pt
-groundingdino_swint_ogc.pth
+yolov7/
+GroundingDINO/

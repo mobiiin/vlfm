@@ -7,14 +7,11 @@ from io import BytesIO
 import re
 import requests
 import json
-import cv2
 
 from .server_wrapper import ServerMixin, host_model, str_to_image
 
-# from vlfm.utils.frame_saver import get_last_frames
-
 try:
-    from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
+    from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 except ModuleNotFoundError:
     print("Could not import transformers. This is OK if you are only using the client.")
 
@@ -23,21 +20,25 @@ class VLMModel:
 
     def __init__(
         self,
-        model_name: str = "llava-hf/llava-v1.6-mistral-7b-hf",
+        model_name: str = "google/paligemma-3b-mix-224",
         device: Optional[Any] = None,
+        dtype: torch.dtype = torch.bfloat16,
     ) -> None:
         if device is None:
             device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
         # Load model and processor
-        self.processor = LlavaNextProcessor.from_pretrained(model_name)
-        self.model = LlavaNextForConditionalGeneration.from_pretrained(
-            model_name, torch_dtype=torch.float16
-        )
-        self.model.to(device)
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model = PaliGemmaForConditionalGeneration.from_pretrained(
+            model_name,
+            torch_dtype=dtype,
+            device_map=device,
+            revision="bfloat16",
+        ).eval()
         self.device = device
+        self.dtype = dtype
 
-    def process_input(self, image1: np.ndarray, image2: Optional[np.ndarray] = None, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, prompt: str, replace_word: str = "chair", image2: Optional[np.ndarray] = None) -> tuple:
         """
         Process the images and text prompt using the model.
 
@@ -51,6 +52,7 @@ class VLMModel:
             tuple: A tuple containing the model's response and a dictionary of action scores.
         """
         # Replace "couch" (case-insensitive) with the specified word in the prompt
+        
         updated_prompt = re.sub(r"couch", replace_word, prompt, flags=re.IGNORECASE)
 
         pil_img1 = Image.fromarray(image1)
@@ -60,24 +62,16 @@ class VLMModel:
             pil_img2 = Image.fromarray(image2)
             images.append(pil_img2)
 
-        conversation = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": updated_prompt},
-                    *[{"type": "image"} for _ in images],
-                ],
-            },
-        ]
-
-        prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
-        inputs = self.processor(images, text=prompt, return_tensors="pt").to(self.device)
+        # Process the images and prompt
+        model_inputs = self.processor(text=updated_prompt, images=images, return_tensors="pt").to(self.device)
+        input_len = model_inputs["input_ids"].shape[-1]
 
         with torch.inference_mode():
-            output = self.model.generate(**inputs, max_new_tokens=300, temperature=1)
-            response = self.processor.decode(output[0], skip_special_tokens=True)
+            generation = self.model.generate(**model_inputs, max_new_tokens=100, do_sample=False)
+            generation = generation[0][input_len:]
+            response = self.processor.decode(generation, skip_special_tokens=True)
 
-        # Extract action scores using regex
+        # Extract action scores using regex (if applicable)
         pattern = r"(Go forward|Go backward|Turn right|Turn left): (\d+(\.\d+)?)"
         matches = re.findall(pattern, response)
         action_scores = {action: float(score) for action, score, _ in matches}
@@ -87,12 +81,11 @@ class VLMModel:
         
         return response, action_scores
 
-
 class VLMModelClient:
     def __init__(self, port: int = 12182):
         self.url = f"http://localhost:{port}/vlm"
 
-    def process_input(self, image1: np.ndarray, image2: Optional[np.ndarray] = None, prompt: str, replace_word: str = "chair") -> tuple:
+    def process_input(self, image1: np.ndarray, prompt: str, replace_word: str = "chair", image2: Optional[np.ndarray] = None) -> tuple:
         """
         Send the images and text prompt to the server and get the model's response.
 
@@ -184,12 +177,22 @@ if __name__ == "__main__":
 
     class VLMModelServer(ServerMixin, VLMModel):
         def process_payload(self, payload: dict) -> dict:
-            image1 = str_to_image(payload["image1"])
-            image2 = str_to_image(payload["image2"]) if "image2" in payload else None
-            prompt = payload["txt"]
-            replace_word = payload.get("replace_word", "chair")  # Default to "chair" if not provided
-            response, action_scores = self.process_input(image1, image2, prompt, replace_word=replace_word)
-            return {"response": response, "action_scores": action_scores}
+            try:
+                print("Received payload:", payload)  # Debugging
+                # Decode base64-encoded images
+                image1 = str_to_image(payload["image1"])
+                image2 = str_to_image(payload["image2"]) if "image2" in payload else None
+                prompt = payload["txt"]
+                replace_word = payload.get("replace_word", "chair")  # Default to "chair" if not provided
+
+                print("Images decoded successfully")  # Debugging
+
+                # Process the input
+                response, action_scores = self.process_input(image1=image1, image2=image2, prompt=prompt, replace_word=replace_word)
+                return {"response": response, "action_scores": action_scores}
+            except Exception as e:
+                print(f"Error in process_payload: {e}")
+                return {"response": f"Error: {str(e)}", "action_scores": {}}
 
     vlm = VLMModelServer()
     print("Model loaded!")

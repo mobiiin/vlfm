@@ -9,8 +9,10 @@ import torch
 
 from vlfm.vlm.coco_classes import COCO_CLASSES
 from vlfm.vlm.detections import ObjectDetections
-
+# from coco_classes import COCO_CLASSES
+# from detections import ObjectDetections
 from .server_wrapper import ServerMixin, host_model, send_request, str_to_image
+# from server_wrapper import ServerMixin, host_model, send_request, str_to_image
 
 sys.path.insert(0, "yolov7/")
 try:

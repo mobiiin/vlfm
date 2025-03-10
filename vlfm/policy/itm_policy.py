@@ -25,7 +25,6 @@ from vlfm.utils.habitat_visualizer import HabitatVis
 from vlfm.utils.vram_tracker import GPUMemoryTracker
 PROMPT_SEPARATOR = "|"
 
-
 class BaseITMPolicy(BaseObjectNavPolicy):
     _target_object_color: Tuple[int, int, int] = (0, 255, 0)
     _selected__frontier_color: Tuple[int, int, int] = (0, 255, 255)
@@ -72,12 +71,79 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         if np.array_equal(frontiers, np.zeros((1, 2))) or len(frontiers) == 0:
             print("No frontiers found during exploration, stopping.")
             return self._stop_action
+
+        # Propose additional frontiers based on the value map
+        frontiers = self._propose_additional_frontiers(frontiers)
+
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
         os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
         print(f"Best value: {best_value*100:.2f}%")
         pointnav_action = self._pointnav(best_frontier, stop=False)
 
         return pointnav_action
+
+    def _propose_additional_frontiers(self, frontiers: np.ndarray) -> np.ndarray:
+        """
+        Proposes additional frontier points based on the value map.
+        Args:
+            frontiers: Existing frontier points.
+        Returns:
+            Updated list of frontier points.
+        """
+
+        # Check if self._value_map is initialized and has the correct shape
+        if not hasattr(self, '_value_map') or self._value_map is None:
+            print("Value map is not initialized. Returning existing frontiers.")
+            return frontiers
+
+        # Access the value map data
+        value_map_data = self._value_map._value_map  # Shape: (size, size, value_channels)
+
+        # Reduce the value map to a 2D array by taking the maximum value across channels
+        reduced_value_map = np.max(value_map_data, axis=2)  # Shape: (size, size)
+
+        # Threshold for high-value regions
+        high_value_threshold = 0.9  # Adjust this threshold as needed
+
+        # Find high-value regions in the value map
+        high_value_indices = np.argwhere(reduced_value_map > high_value_threshold)
+
+        if len(high_value_indices) == 0:
+            return frontiers  # No high-value regions found
+
+        # Convert indices to world coordinates
+        high_value_points = self._indices_to_world(
+            high_value_indices,
+            self._value_map._episode_pixel_origin,  # Pass episode_pixel_origin
+            self._value_map.pixels_per_meter,      # Pass pixels_per_meter
+        )
+
+        # Cluster high-value points to avoid adding too many points
+        from sklearn.cluster import KMeans
+        max_additional_points = 5  # Maximum number of additional points to add
+        if len(high_value_points) > max_additional_points:
+            kmeans = KMeans(n_clusters=max_additional_points, random_state=0).fit(high_value_points)
+            high_value_points = kmeans.cluster_centers_  # Use cluster centers as the proposed points
+
+        # Add new points to the existing frontiers
+        updated_frontiers = np.vstack([frontiers, high_value_points])
+
+        return updated_frontiers
+
+    def _indices_to_world(self, indices: np.ndarray, episode_pixel_origin: np.ndarray, pixels_per_meter: float) -> np.ndarray:
+        """
+        Converts map indices to world coordinates.
+        Args:
+            indices: Array of indices in the map (shape: (N, 2)).
+            episode_pixel_origin: The origin of the episode in pixel coordinates.
+            pixels_per_meter: The resolution of the map in pixels per meter.
+        Returns:
+            Array of world coordinates (shape: (N, 2)).
+        """
+        # Convert indices to world coordinates
+        world_points = (indices - episode_pixel_origin) / pixels_per_meter
+        world_points[:, 1] *= -1  # Flip y-axis to match world coordinates
+        return world_points
 
     def _get_best_frontier(
         self,
@@ -203,10 +269,10 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         for rgb in all_rgb:
             # Get the model's response and action scores
-            response, action_scores = self._prompt_engineer.process_image_and_prompt(
-                rgb,
-                # self._observations_cache["obstacle_map"],
-                self._text_prompt,
+            response, action_scores, found_ooi = self._prompt_engineer.process_image_and_prompt(
+                image1=rgb,
+                # image2=self._observations_cache["obstacle_map"],
+                prompt=self._text_prompt,
                 target_object=self._target_object,
             )
             
@@ -229,8 +295,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
 
         self._value_map.update_agent_traj(
             self._observations_cache["robot_xy"],
-            self._observations_cache["robot_heading"],
-        )
+            self._observations_cache["robot_heading"],)
 
     def _sort_frontiers_by_value(
         self, observations: "TensorDict", frontiers: np.ndarray
