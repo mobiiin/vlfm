@@ -58,6 +58,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         )
         self._acyclic_enforcer = AcyclicEnforcer()
         # self._tracker = GPUMemoryTracker()  # Initialize the memory tracker
+        self._found_ooi = "Unknown"  # Initialize found_ooi
 
     def _reset(self) -> None:
         super()._reset()
@@ -72,8 +73,9 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             print("No frontiers found during exploration, stopping.")
             return self._stop_action
 
-        # Propose additional frontiers based on the value map
-        frontiers = self._propose_additional_frontiers(frontiers)
+        # Conditionally propose additional frontiers based on found_ooi
+        if self._found_ooi == "Yes":  # Only propose additional frontiers if the object is found
+            frontiers = self._propose_additional_frontiers(frontiers)
 
         best_frontier, best_value = self._get_best_frontier(observations, frontiers)
         os.environ["DEBUG_INFO"] = f"Best value: {best_value*100:.2f}%"
@@ -103,7 +105,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         reduced_value_map = np.max(value_map_data, axis=2)  # Shape: (size, size)
 
         # Threshold for high-value regions
-        high_value_threshold = 0.9  # Adjust this threshold as needed
+        high_value_threshold = 0.8  # Adjust this threshold as needed
 
         # Find high-value regions in the value map
         high_value_indices = np.argwhere(reduced_value_map > high_value_threshold)
@@ -277,6 +279,7 @@ class BaseITMPolicy(BaseObjectNavPolicy):
             )
             
             action_scores_list.append(action_scores)
+            self._found_ooi = found_ooi  # Store found_ooi
 
         del self._observations_cache["obstacle_map"]
 
