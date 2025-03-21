@@ -61,11 +61,11 @@ habitat_baselines:
   # video_option: "tensorboard"
   torch_gpu_id: 0
   tensorboard_dir: "tb"
-  video_dir: "/home/mhabibp/vlfm/video"
-  # video_dir: "/home/fafghah/Documents/Mobin/vlfm/video"
+  # video_dir: "/home/mhabibp/vlfm/video"
+  video_dir: "/home/fafghah/Documents/Mobin/vlfm/video"
   # VIDEO_OPTION: "disk" 
   # record_video_frequency: 10
-  test_episode_count: -1
+  test_episode_count: 100
   checkpoint_folder: "data/new_checkpoints"
   trainer_name: "vlfm"
   num_updates: 270000

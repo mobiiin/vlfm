@@ -269,11 +269,32 @@ class BaseITMPolicy(BaseObjectNavPolicy):
         
         # cv2.imwrite("_obstaclemappppp.png", self._observations_cache["obstacle_map"])
 
+        # # Iterate through all_rgb and run VLM only once every 3 frames
+        # for idx, rgb in enumerate(all_rgb):
+        #     if idx % 3 == 0:  # Run VLM logic for every 3rd frame
+        #         # Get the model's response and action scores
+        #         response, action_scores, found_ooi = self._prompt_engineer.process_image_and_prompt(
+        #             image1=rgb,
+        #             prompt=self._text_prompt,
+        #             target_object=self._target_object,
+        #         )
+        #         action_scores_list.append(action_scores)
+        #         self._found_ooi = found_ooi  # Store found_ooi
+        #     else:
+        #         # Output zero scores for non-trigger frames
+        #         zero_scores = {
+        #             "Go forward": 0.0,
+        #             "Go backward": 0.0,
+        #             "Turn right": 0.0,
+        #             "Turn left": 0.0,
+        #         }
+        #         action_scores_list.append(zero_scores)
+
         for rgb in all_rgb:
             # Get the model's response and action scores
             response, action_scores, found_ooi = self._prompt_engineer.process_image_and_prompt(
                 image1=rgb,
-                # image2=self._observations_cache["obstacle_map"],
+                image2=self._observations_cache["obstacle_map"],
                 prompt=self._text_prompt,
                 target_object=self._target_object,
             )
